@@ -3,48 +3,64 @@ module Problem054 where
 import Data.List.Split
 import Data.List
 import Data.Maybe
+import Debug.Trace
 
 data Player = Player1 | Player2 deriving (Eq, Show)
 
 type Hand = [String]
+type HandValue = String
+
+cards = ['0'..'9'] ++ ['T', 'J', 'Q', 'K', 'A']
 
 cardEq a b = fromJust $ pure compare <*> indexOf a <*> indexOf b
-  where
-    cards = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
-    indexOf c = findIndex (== c) cards
+  where indexOf c = findIndex (== c) cards
 
-highToLow = reverse . (sortBy cardEq)
+highToLow = sortBy (flip cardEq)
 
-handValue :: Hand -> String
-handValue hand = value freq
+highFreq (a, f1) (b, f2) = foq $ compare f1 f2
   where
+    foq EQ = cardEq a b
+    foq x  = x
+
+handValue :: Hand -> HandValue
+handValue hand
+  | royal    && flush = "900000"       -- Royal flush: Ten, Jack, Queen, King, Ace, in same suit
+  | straight && flush = "8" ++ values' -- Straight Flush: All cards are consecutive values of same suit
+  | flush             = "5" ++ values' -- Same suit
+  | straight          = "4" ++ values' -- straight : consecutive values
+  | otherwise         = freqCheck $ sortBy (flip highFreq) $ map toPair $ group values
+  where
+    values = sortBy cardEq $ map head hand
+    values' = reverse values
     toPair l = (head l, length l)
-    freq = map toPair $ group $ sortBy cardEq $ map head hand
+
+    royal = isSuffixOf values cards 
+    flush = (== 1) $ length $ nub $ map last hand
+    straight = isInfixOf values cards
+
     -- one pair
-    value [(p1, 2), (c1, 1), (c2, 1), (c3, 1)] = "10" ++ [p1] ++ (highToLow [c1, c2, c3])
+    freqCheck [(p1, 2), (c1, 1), (c2, 1), (c3, 1)] = "10" ++ [p1] ++ (highToLow [c1, c2, c3])
     -- two pairs
-    value [(p1, 2), (p2, 2), (c1, 1)] = "200" ++ (highToLow [p1, p2]) ++ [c1]
+    freqCheck [(p1, 2), (p2, 2), (c1, 1)] = "200" ++ (highToLow [p1, p2]) ++ [c1]
     -- three of a kind
-    value [(t1, 3), (c1, 1), (c2, 1)] = "300" ++ [t1] ++ (highToLow [c1, c2])
-    -- straight : consecutive values
-    -- flush: same suit
+    freqCheck [(t1, 3), (c1, 1), (c2, 1)] = "300" ++ [t1] ++ (highToLow [c1, c2])
     -- full house: 3 same kind and a pair
-    value [(t1, 3), (p1, 2)] = "6000" ++ [t1, p1]
+    freqCheck [(t1, 3), (p1, 2)] = "6000" ++ [t1, p1]
     -- four of a kind
-    value [(t1, 4), (c1, 1)] = "7000" ++ [t1, c1]
+    freqCheck [(t1, 4), (c1, 1)] = "7000" ++ [t1, c1]
     -- highest card
-    value cards = highToLow $ map fst cards
+    freqCheck _ = "0" ++ values'
 
-playHand :: Hand -> Hand -> Player
-playHand h1 h2 = Player2
+playHand :: String -> Player
+playHand hand = winner $ zip h1 h2
   where
-    v1 = handValue h1
-    v2 = handValue h2
-    result = compareBy highToLow v1 v2
-
-winner :: String -> Player
-winner cards = playHand h1 h2
-  where 
-    pairs = splitOn " " cards
-    h1 = take 5 pairs
-    h2 = drop 5 pairs
+    pairs = splitOn " " hand
+    h1 = handValue $ take 5 pairs
+    h2 = handValue $ drop 5 pairs
+    winner [] = Player2
+    winner ((a, b):xs)
+      | eq == GT  = Player1
+      | eq == EQ  = winner xs
+      | otherwise = Player2
+      where 
+        eq = cardEq a b
